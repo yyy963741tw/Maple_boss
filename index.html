@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>新楓之谷週王結晶計算機 (v10)</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --text-color: #e0e0e0;
+            --border-color: #444;
+            --highlight-color: #ff6b6b;
+            --meso-color: #ffd700;
+            --crystal-color: #74c0fc;
+            --monthly-color: #d0bfff;
+            --rank-col-width: 50px;
+            --char-col-left: 50px;
+        }
+
+        html, body { height: 100%; margin: 0; overflow: hidden; }
+        body { font-family: "Microsoft JhengHei", Arial, sans-serif; padding: 10px 20px; background-color: var(--bg-color); color: var(--text-color); display: flex; flex-direction: column; box-sizing: border-box; }
+        h2 { text-align: center; margin: 5px 0 10px 0; color: #fff; flex-shrink: 0; }
+        .hint { text-align: center; color: #888; font-size: 0.9em; margin-bottom: 10px; flex-shrink: 0; }
+
+        /* 面板 */
+        .matrix-panel { background: #1e1e1e; margin-bottom: 10px; border-radius: 8px; border: 1px solid #333; overflow: hidden; transition: all 0.3s ease; flex-shrink: 0; }
+        .matrix-header { padding: 10px 15px; background-color: #252525; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; }
+        .matrix-header:hover { background-color: #333; }
+        .matrix-title { font-size: 16px; font-weight: bold; color: var(--meso-color); margin: 0; }
+        .toggle-icon { font-size: 14px; color: #888; transition: transform 0.3s; }
+        .matrix-panel.collapsed .toggle-icon { transform: rotate(-90deg); }
+        .matrix-panel.collapsed .matrix-content { display: none; }
+        .matrix-content { padding: 10px 15px; overflow-x: auto; display: block; }
+        
+        .summary-box { display: flex; gap: 20px; justify-content: center; margin-bottom: 0; flex-wrap: wrap; }
+        .summary-card { background: #333; padding: 5px 15px; border-radius: 5px; text-align: center; border: 1px solid #555; }
+        .summary-card .label { font-size: 12px; color: #aaa; display: block; margin-bottom: 2px;}
+        .summary-card .value { font-size: 18px; font-weight: bold; color: #fff; }
+        .summary-card .value.meso { color: var(--meso-color); font-family: monospace; font-size: 20px; }
+        .summary-card .value.crystal { color: var(--crystal-color); }
+        .summary-card .limit-label { font-size: 11px; color: #666; margin-left: 5px; }
+
+        /* 明細 */
+        .detail-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 5px; }
+        .detail-table th, .detail-table td { border: 1px solid #444; padding: 6px; text-align: center; vertical-align: middle; }
+        .detail-table th { background-color: #333; color: #fff; }
+        .detail-table tr:nth-child(even) { background-color: #252525; }
+        
+        .boss-tag { display: inline-block; background: #1a1a1a; border: 1px solid #444; border-radius: 4px; padding: 1px 5px; margin: 1px; font-size: 11px; color: #ddd; }
+        .tag-price { color: #ffd700; font-size: 10px; margin-left: 2px; opacity: 0.8; }
+        .monthly-badge { display: inline-block; background-color: #5f3dc4; color: #fff; font-size: 10px; padding: 0 3px; border-radius: 3px; margin-left: 3px; vertical-align: middle; }
+
+        /* 控制列 */
+        .controls { text-align: center; margin-bottom: 10px; display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px; flex-shrink: 0; }
+        button.btn { padding: 6px 12px; cursor: pointer; color: white; border: none; border-radius: 4px; font-size: 13px; transition: opacity 0.2s; }
+        button.btn:hover { opacity: 0.8; }
+        .btn-save { background-color: #1971c2; }
+        .btn-load { background-color: #2f9e44; }
+        .btn-reset { background-color: #c92a2a; }
+        .btn-reset-order { background-color: #495057; }
+        .btn-config { background-color: #e67e22; }
+        .btn-sort { background-color: #8e44ad; min-width: 140px;}
+        .btn-add-char { background-color: #20c997; color: #000; font-weight: bold; }
+        .btn-delete-char { background-color: #c92a2a; color: white; font-weight: bold;}
+
+        /* Modal */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100; justify-content: center; align-items: center; }
+        .modal-overlay.active { display: flex; }
+        .modal-content { background: #252525; padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; border: 1px solid #555; box-shadow: 0 0 20px #000; }
+        .modal-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #fff; text-align: center;}
+        .boss-list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
+        .boss-check-item { background: #333; padding: 8px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; font-size: 13px; border: 1px solid #444; user-select: none; }
+        .boss-check-item input { margin-right: 8px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; color: #aaa; font-size: 13px; }
+        .form-group input, .form-group select { width: 100%; padding: 8px; box-sizing: border-box; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--crystal-color); }
+        .modal-actions { text-align: center; border-top: 1px solid #444; padding-top: 15px; }
+
+        /* 表格容器 */
+        .table-container { flex: 1; overflow: auto; box-shadow: 0 0 15px rgba(0,0,0,0.5); background: #1e1e1e; border-radius: 8px; border: 1px solid #333; min-height: 0; cursor: grab; }
+        .table-container.grabbing { cursor: grabbing; user-select: none; }
+        table { width: 100%; border-collapse: separate; border-spacing: 0; }
+        th, td { border: 1px solid var(--border-color); padding: 8px 4px; text-align: center; font-size: 13px; min-width: 60px; transition: background-color 0.2s; }
+
+        /* Sticky */
+        thead th { position: sticky; top: 0; z-index: 40; background-color: #000; color: #fff; height: 45px; border-bottom: 2px solid #666; vertical-align: middle; font-size: 12px; }
+        thead th .boss-price { display: block; font-size: 11px; color: #ffe066; font-weight: normal; margin-top: 2px; }
+        thead th:nth-child(1) { left: 0; z-index: 50; width: var(--rank-col-width); min-width: var(--rank-col-width); }
+        thead th:nth-child(2) { left: var(--char-col-left); z-index: 50; min-width: 180px; }
+        thead th.col-stat-count { right: 120px; z-index: 50; width: 60px; background-color: #003366; }
+        thead th.col-stat-total { right: 0; z-index: 50; width: 120px; background-color: #5c0000; }
+
+        tfoot th, tfoot td { position: sticky; bottom: 0; background-color: #000; color: #fff; z-index: 40; font-weight: bold; height: 35px; border-top: 2px solid #666; }
+        tfoot th:nth-child(1) { left: 0; z-index: 50; }
+        tfoot th:nth-child(2) { left: var(--char-col-left); z-index: 50; }
+        tfoot td.col-stat-count { right: 120px; z-index: 50; background-color: #003366; color: var(--crystal-color); }
+        tfoot td.col-stat-total { right: 0; z-index: 50; background-color: #5c0000; color: var(--meso-color); text-align: right; padding-right: 10px;}
+
+        tbody th.rank-col { position: sticky; left: 0; z-index: 30; background-color: #1a1a1a; border-right: 1px solid #555; width: var(--rank-col-width); min-width: var(--rank-col-width); }
+        tbody th.char-col { position: sticky; left: var(--char-col-left); z-index: 30; border-right: 2px solid #555; cursor: move; display: flex; align-items: center; justify-content: space-between; height: 43px; padding: 0 5px; box-sizing: border-box; border-bottom: 1px solid var(--border-color); border-top: 0; }
+        tr:first-child th.char-col { border-top: 0; }
+
+        tbody td.row-count { position: sticky; right: 120px; z-index: 30; background-color: #0d1b2a; border-left: 2px solid #555; color: var(--crystal-color); font-weight: bold; }
+        tbody td.row-count.over-limit { color: #ff6b6b; }
+        tbody td.row-total { position: sticky; right: 0; z-index: 30; background-color: #2a0a0a; border-left: 1px solid #555; color: var(--meso-color); font-weight: bold; font-family: monospace; font-size: 14px; text-align: right; padding-right: 10px; }
+
+        /* 隱藏 */
+        .hidden-divider { background-color: #333; color: #aaa; cursor: pointer; font-weight: bold; height: 40px; }
+        .hidden-divider:hover { background-color: #444; color: #fff; }
+        tbody.hidden-body { display: none; }
+        tbody.hidden-body.open { display: table-row-group; }
+        tr.hidden-row { filter: grayscale(100%); opacity: 0.6; background-color: #222; }
+
+        .action-btns { display: flex; gap: 2px; margin-left: 5px; }
+        .btn-mini { border: none; border-radius: 3px; width: 24px; height: 24px; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s; }
+        .btn-mini:hover { opacity: 0.8; }
+        .btn-check { background-color: #2b8a3e; color: white; }
+        .btn-clear { background-color: #c92a2a; color: white; }
+        .btn-hide { background-color: #495057; color: white; font-size: 10px;}
+        .btn-restore { background-color: #1971c2; color: white; font-weight: bold;}
+        input.rank-input { width: 100%; background: transparent; border: none; color: #4dabf7; text-align: center; font-size: 14px; font-weight: bold; outline: none; }
+
+        /* 職業顏色 */
+        tr.stat-str th.char-col { background-color: #423d00; color: #fff5cc; }
+        tr.stat-dex th.char-col { background-color: #0d3b0d; color: #d3f9d8; }
+        tr.stat-luk th.char-col { background-color: #5c2b00; color: #ffe8cc; }
+        tr.stat-int th.char-col { background-color: #0b454f; color: #e3fafc; }
+        tr.stat-hp th.char-col { background-color: #3b1e56; color: #f3d9fa; }
+        tr.stat-all th.char-col { background-color: #102a4e; color: #d0ebff; }
+        tr.dragging { opacity: 0.5; background-color: #555; }
+        
+        td.boss-cell { cursor: pointer; color: #444; position: relative; }
+        td.boss-cell:hover { filter: brightness(1.3); background-color: rgba(255,255,255,0.05); }
+        td.checked { background-color: #1c3d20 !important; color: #40c057; }
+        td.checked::after { content: '💰'; text-shadow: 0 0 5px #40c057; display: block; font-size: 14px; }
+        td.ignored-drop { opacity: 0.4; filter: grayscale(1); background-color: #222 !important; color: #888 !important; }
+        td.ignored-drop::after { content: '❌' !important; color: #888 !important; text-shadow: none; font-size: 12px; }
+        
+        /* 互斥格內標記 */
+        td.conflict { background-color: rgba(230, 126, 34, 0.15) !important; }
+        td.conflict::after { content: '▲'; color: #e67e22; font-size: 14px; display: block; text-shadow: 0 0 5px rgba(230, 126, 34, 0.3); }
+
+        .boss-cell input[type="checkbox"] { display: none; }
+        .stat-label { display: block; font-size: 11px; opacity: 0.7; margin-top: 2px; }
+        .drag-handle-icon { font-size: 12px; color: #888; margin-right: 5px; cursor: move; }
+
+    </style>
+</head>
+<body>
+
+    <h2>新楓之谷週王結晶計算機 (v10)</h2>
+    
+    <div class="matrix-panel" id="matrixPanel">
+        <div class="matrix-header" onclick="toggleMatrix()">
+            <div class="matrix-title">📊 本週收益統計 (90顆上限)</div>
+            <span class="toggle-icon">▼</span>
+        </div>
+        <div class="matrix-content">
+            <div class="summary-box">
+                <div class="summary-card">
+                    <span class="label">有效結晶總數</span>
+                    <span class="value crystal" id="grandTotalCount">0</span>
+                    <span class="limit-label">/ 90</span>
+                </div>
+                <div class="summary-card">
+                    <span class="label">本週有效收益</span>
+                    <span class="value meso" id="grandTotalMeso">0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="matrix-panel collapsed" id="detailPanel">
+        <div class="matrix-header" onclick="toggleDetail()">
+            <div class="matrix-title">📋 查看結算明細 (角色分組)</div>
+            <span class="toggle-icon">▼</span>
+        </div>
+        <div class="matrix-content" id="detailContent"></div>
+    </div>
+    
+    <div class="controls">
+        <button class="btn btn-add-char" onclick="openAddCharModal()">➕ 新增角色</button>
+        <button class="btn btn-config" onclick="openBossModal()">⚙️ 設定顯示 BOSS</button>
+        <button class="btn btn-sort" onclick="toggleSortOrder()" id="sortBtn">價格排序: 高->低</button>
+        <button class="btn btn-save" onclick="exportData()">💾 備份檔案</button>
+        <button class="btn btn-load" onclick="document.getElementById('fileInput').click()">📂 讀取檔案</button>
+        <button class="btn btn-reset" onclick="resetData()">🗑️ 清除本週勾選</button>
+        <input type="file" id="fileInput" accept=".json" style="display: none;" onchange="importData(this)">
+    </div>
+
+    <div class="hint">💡 提示：按住表格任意處可「左右拖曳」 | 橘色三角 ▲ 代表因互斥未選</div>
+
+    <div class="table-container" id="scrollContainer">
+        <table id="bossTable">
+            <thead><tr id="headerRow"></tr></thead>
+            <tbody id="activeBody"></tbody>
+            <tbody id="hiddenDividerBody"><tr class="hidden-divider" onclick="toggleHiddenBody()"><td colspan="100%">⬇ 已隱藏角色列表 (<span id="hiddenCount">0</span>) 點擊展開/收折</td></tr></tbody>
+            <tbody id="hiddenBody" class="hidden-body"></tbody>
+            <tfoot id="tableFooter"></tfoot>
+        </table>
+    </div>
+
+    <div class="modal-overlay" id="bossModal">
+        <div class="modal-content">
+            <div class="modal-title">勾選要顯示在列表上的 BOSS</div>
+            <div style="text-align:center; font-size:12px; color:#aaa; margin-bottom:10px;">取消勾選 = 隱藏</div>
+            <div class="boss-list-grid" id="bossListGrid"></div>
+            <div class="modal-actions">
+                <button class="btn btn-save" onclick="saveBossConfig()">確定儲存</button>
+                <button class="btn btn-reset-order" onclick="closeBossModal()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="addCharModal">
+        <div class="modal-content">
+            <div class="modal-title">➕ 新增自訂角色</div>
+            <div class="form-group"><label>角色名稱</label><input type="text" id="newCharName" placeholder="例如：我的分身..."></div>
+            <div class="form-group">
+                <label>主屬性</label>
+                <select id="newCharStat">
+                    <option value="str">STR (力量)</option><option value="dex">DEX (敏捷)</option>
+                    <option value="int">INT (智力)</option><option value="luk">LUK (幸運)</option>
+                    <option value="hp">HP (體力)</option><option value="all">ALL (全屬性)</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-save" onclick="addNewCharacter()">確定新增</button>
+                <button class="btn btn-reset-order" onclick="closeAddCharModal()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 資料
+        const bossDataRaw = [
+            { id: "xbm", name: "終極黑魔法師", price: 3000000000, group: "bm", type: "monthly" },
+            { id: "xmarisia", name: "終極瑪麗西亞", price: 1500000000, group: "marisia" },
+            { id: "xkaling", name: "終極咖凌", price: 1443300000, group: "kaling" },
+            { id: "xkalos", name: "終極卡洛斯", price: 1237100000, group: "kalos" },
+            { id: "hbm", name: "困難黑魔法師", price: 990841916, group: "bm", type: "monthly" },
+            { id: "hbaderis", name: "困難巴德利斯", price: 840000000, group: "baderis" },
+            { id: "hlimbo", name: "困難林波", price: 749000000, group: "limbo" },
+            { id: "xseren", name: "終極賽蓮", price: 724200000, group: "seren" },
+            { id: "hkaling", name: "困難咖凌", price: 721100000, group: "kaling" },
+            { id: "ckalos", name: "混沌卡洛斯", price: 618800000, group: "kalos" },
+            { id: "nbaderis", name: "普通巴德利斯", price: 560000000, group: "baderis" },
+            { id: "nlimbo", name: "普通林波", price: 420000000, group: "limbo" },
+            { id: "nkaling", name: "普通咖凌", price: 361700000, group: "kaling" },
+            { id: "xlotus", name: "終極史烏", price: 323500000, group: "lotus" },
+            { id: "nkalos", name: "普卡洛斯", price: 309000000, group: "kalos" },
+            { id: "hseren", name: "困賽蓮", price: 271600000, group: "seren" },
+            { id: "ekaling", name: "簡咖凌", price: 258300000, group: "kaling" },
+            { id: "ekalos", name: "簡卡洛斯", price: 236900000, group: "kalos" },
+            { id: "nmarisia", name: "普瑪麗西亞", price: 150000000, group: "marisia" }, 
+            { id: "nseren", name: "普賽蓮", price: 149800000, group: "seren" },
+            { id: "hvhilla", name: "困真希拉", price: 145200000, group: "vhilla" },
+            { id: "hwill", name: "困威爾", price: 127400000, group: "will" },
+            { id: "cslime", name: "混史萊姆", price: 126500000, group: "slime" },
+            { id: "hdunkel", name: "困頓凱爾", price: 126200000, group: "dunkel" },
+            { id: "nvhilla", name: "普真希拉", price: 124400000, group: "vhilla" },
+            { id: "cgloom", name: "混戴斯克", price: 111200000, group: "gloom" },
+            { id: "hlucid", name: "困露希妲", price: 102400000, group: "lucid" },
+            { id: "hlotus", name: "困史烏", price: 91900000, group: "lotus" },
+            { id: "hdamien", name: "困戴米安", price: 85700000, group: "damien" },
+            { id: "ndunkel", name: "一般頓凱爾", price: 84700000, group: "dunkel" },
+            { id: "ngloom", name: "一般戴斯克", price: 79500000, group: "gloom" },
+            { id: "nwill", name: "一般威爾", price: 74200000, group: "will" },
+            { id: "nlucid", name: "普露希妲", price: 64300000, group: "lucid" },
+            { id: "ewill", name: "簡單威爾", price: 57400000, group: "will" },
+            { id: "elucid", name: "簡單露希妲", price: 53800000, group: "lucid" },
+            { id: "nslime", name: "普史萊姆", price: 43000000, group: "slime" },
+            { id: "ndamien", name: "普戴米安", price: 28843452, group: "damien" },
+            { id: "nlotus", name: "普史烏", price: 27207040, group: "lotus" },
+            { id: "cpap", name: "混拉圖", price: 20088150, group: "pap" },
+            { id: "pno", name: "濃姬", price: 18500000, group: "pno" },
+            { id: "cvell", name: "混貝倫", price: 9070003, group: "ra_vel" },
+            { id: "hmag", name: "困梅", price: 8819007, group: "mag" },
+            { id: "ncyg", name: "普女皇", price: 8709400, group: "cyg" },
+            { id: "cban", name: "混斑斑", price: 7693781, group: "ra_ban" },
+            { id: "cqueen", name: "混皇后", price: 7682035, group: "ra_queen" },
+            { id: "cpb", name: "混皮", price: 7630700, group: "pb" },
+            { id: "cpierre", name: "混丑", price: 7313306, group: "ra_pierre" },
+            { id: "czak", name: "混炎魔", price: 7059750, group: "zak" },
+            { id: "hhilla", name: "困希拉", price: 6677700, group: "hilla" },
+            { id: "ecyg", name: "簡女皇", price: 5307400, group: "cyg" }
+        ];
+
+        const formatMeso = (num) => num.toLocaleString('en-US');
+        const formatShortMeso = (num) => {
+            if (num >= 100000000) return (num / 100000000).toFixed(2) + "億";
+            if (num >= 10000) return (num / 10000).toFixed(0) + "萬";
+            return num;
+        };
+
+        const statLabels = { "str": "STR", "dex": "DEX", "int": "INT", "luk": "LUK", "hp": "HP", "all": "ALL" };
+        const rawCharData = [
+            { id: "hero", name: "英雄", stat: "str" }, { id: "pala", name: "聖騎士", stat: "str" }, { id: "dk", name: "黑騎士", stat: "str" },
+            { id: "soul", name: "聖魂劍士", stat: "str" }, { id: "miha", name: "米哈逸", stat: "str" }, { id: "aran", name: "狂狼勇士", stat: "str" },
+            { id: "blast", name: "爆拳槍神", stat: "str" }, { id: "ds", name: "惡魔殺手", stat: "str" }, { id: "da", name: "惡魔復仇者", stat: "hp" },
+            { id: "kaiser", name: "凱撒", stat: "str" }, { id: "adele", name: "阿戴爾", stat: "str" }, { id: "zero", name: "神之子", stat: "str" },
+            { id: "haya", name: "劍豪", stat: "str" }, { id: "lian", name: "蓮", stat: "str" }, { id: "bish", name: "主教", stat: "int" },
+            { id: "ilm", name: "冰雷", stat: "int" }, { id: "fp", name: "火毒", stat: "int" }, { id: "bw", name: "烈焰巫師", stat: "int" },
+            { id: "evan", name: "龍魔導士", stat: "int" }, { id: "lumi", name: "夜光", stat: "int" }, { id: "bam", name: "煉獄巫師", stat: "int" },
+            { id: "illium", name: "伊利恩", stat: "int" }, { id: "lara", name: "菈菈", stat: "int" }, { id: "kinesis", name: "凱內西斯", stat: "int" },
+            { id: "kanna", name: "陰陽師", stat: "int" }, { id: "lynn", name: "琳恩", stat: "int" }, { id: "bm", name: "箭神", stat: "dex" },
+            { id: "mm", name: "神射手", stat: "dex" }, { id: "pf", name: "開拓者", stat: "dex" }, { id: "wa", name: "破風使者", stat: "dex" },
+            { id: "mercedes", name: "精靈遊俠", stat: "dex" }, { id: "wh", name: "狂豹獵人", stat: "dex" }, { id: "kain", name: "凱殷", stat: "dex" },
+            { id: "nl", name: "夜使者", stat: "luk" }, { id: "shad", name: "暗影神偷", stat: "luk" }, { id: "db", name: "影武者", stat: "luk" },
+            { id: "nw", name: "暗夜行者", stat: "luk" }, { id: "phantom", name: "幻影俠盜", stat: "luk" }, { id: "xenon", name: "傑諾", stat: "all" },
+            { id: "cadena", name: "卡蒂娜", stat: "luk" }, { id: "khali", name: "卡莉", stat: "luk" }, { id: "hoyoung", name: "虎影", stat: "luk" },
+            { id: "corsair", name: "槍神", stat: "dex" }, { id: "bucc", name: "拳霸", stat: "str" }, { id: "cannon", name: "重砲指揮官", stat: "str" },
+            { id: "tb", name: "閃雷悍將", stat: "str" }, { id: "shade", name: "隱月", stat: "str" }, { id: "mech", name: "機甲戰神", stat: "dex" },
+            { id: "ab", name: "天使破壞者", stat: "dex" }, { id: "ark", name: "亞克", stat: "str" }, { id: "mo", name: "墨玄", stat: "dex" }
+        ];
+
+        const STORAGE_KEY = "maple_boss_v10_data";
+        const ORDER_KEY = "maple_boss_v10_order";
+        const HIDDEN_KEY = "maple_boss_v10_hidden";
+        const HIDDEN_BOSS_KEY = "maple_boss_v10_hidden_bosses";
+        const SORT_ORDER_KEY = "maple_boss_v10_sort";
+        const CUSTOM_CHARS_KEY = "maple_boss_v10_custom_chars"; 
+        
+        let checkData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+        let hiddenChars = JSON.parse(localStorage.getItem(HIDDEN_KEY)) || [];
+        let hiddenBossIds = JSON.parse(localStorage.getItem(HIDDEN_BOSS_KEY)) || [];
+        let sortDesc = JSON.parse(localStorage.getItem(SORT_ORDER_KEY)); 
+        if(sortDesc === null) sortDesc = true; 
+        
+        let customCharData = JSON.parse(localStorage.getItem(CUSTOM_CHARS_KEY)) || [];
+        let currentOrder = JSON.parse(localStorage.getItem(ORDER_KEY));
+        if (!currentOrder) { currentOrder = [...rawCharData.map(c => c.id), ...customCharData.map(c => c.id)]; } 
+        else { customCharData.forEach(c => { if (!currentOrder.includes(c.id)) currentOrder.push(c.id); }); }
+        currentOrder = currentOrder.filter(id => !hiddenChars.includes(id));
+
+        function getAllChars() { return [...rawCharData, ...customCharData]; }
+        function getCharById(id) { return getAllChars().find(c => c.id === id); }
+
+        function toggleMatrix() { document.getElementById('matrixPanel').classList.toggle('collapsed'); }
+        function toggleDetail() { document.getElementById('detailPanel').classList.toggle('collapsed'); }
+        function toggleHiddenBody() { document.getElementById('hiddenBody').classList.toggle('open'); }
+
+        function getActiveBosses() {
+            let list = [...bossDataRaw];
+            list.sort((a, b) => sortDesc ? b.price - a.price : a.price - b.price);
+            return list.filter(b => !hiddenBossIds.includes(b.id));
+        }
+
+        function toggleSortOrder() {
+            sortDesc = !sortDesc;
+            localStorage.setItem(SORT_ORDER_KEY, JSON.stringify(sortDesc));
+            updateSortBtnText();
+            initTable(); 
+        }
+        function updateSortBtnText() { document.getElementById('sortBtn').innerText = sortDesc ? "價格排序: 高->低" : "價格排序: 低->高"; }
+
+        function openAddCharModal() { document.getElementById('newCharName').value = ""; document.getElementById('addCharModal').classList.add('active'); }
+        function closeAddCharModal() { document.getElementById('addCharModal').classList.remove('active'); }
+        
+        function addNewCharacter() {
+            const name = document.getElementById('newCharName').value.trim();
+            const stat = document.getElementById('newCharStat').value;
+            if(!name) { alert("請輸入角色名稱"); return; }
+            const newId = "custom_" + Date.now();
+            const newChar = { id: newId, name: name, stat: stat, isCustom: true };
+            customCharData.push(newChar); currentOrder.push(newId);
+            saveAll(); closeAddCharModal(); initTable();
+        }
+
+        function deleteCustomCharacter(charId) {
+            if(!confirm("確定要永久刪除這個自訂角色嗎？")) return;
+            customCharData = customCharData.filter(c => c.id !== charId);
+            currentOrder = currentOrder.filter(id => id !== charId);
+            hiddenChars = hiddenChars.filter(id => id !== charId);
+            Object.keys(checkData).forEach(key => { if(key.startsWith(charId + "_")) delete checkData[key]; });
+            saveAll(); initTable();
+        }
+
+        function openBossModal() {
+            const grid = document.getElementById('bossListGrid'); grid.innerHTML = "";
+            const sortedAll = [...bossDataRaw].sort((a,b) => b.price - a.price);
+            sortedAll.forEach(boss => {
+                const isHidden = hiddenBossIds.includes(boss.id);
+                const div = document.createElement('div'); div.className = 'boss-check-item';
+                div.onclick = function(e) { if(e.target.tagName !== 'INPUT') { const cb = this.querySelector('input'); cb.checked = !cb.checked; } };
+                div.innerHTML = `<input type="checkbox" value="${boss.id}" ${!isHidden ? 'checked' : ''}><div><div style="font-weight:bold">${boss.name}</div><div style="color:#888;font-size:11px;">${formatShortMeso(boss.price)}</div></div>`;
+                grid.appendChild(div);
+            });
+            document.getElementById('bossModal').classList.add('active');
+        }
+        function closeBossModal() { document.getElementById('bossModal').classList.remove('active'); }
+        function saveBossConfig() {
+            const checkboxes = document.querySelectorAll('#bossListGrid input[type="checkbox"]');
+            let newHiddenList = [];
+            checkboxes.forEach(cb => { if(!cb.checked) newHiddenList.push(cb.value); });
+            hiddenBossIds = newHiddenList;
+            localStorage.setItem(HIDDEN_BOSS_KEY, JSON.stringify(hiddenBossIds));
+            closeBossModal(); initTable(); 
+        }
+
+        function hideCharacter(charId) {
+            const idx = currentOrder.indexOf(charId); if (idx > -1) currentOrder.splice(idx, 1);
+            if (!hiddenChars.includes(charId)) hiddenChars.push(charId);
+            saveAll(); renderTables(); updateAllStats();
+        }
+        function restoreCharacter(charId) {
+            const idx = hiddenChars.indexOf(charId); if (idx > -1) hiddenChars.splice(idx, 1);
+            if (!currentOrder.includes(charId)) currentOrder.push(charId);
+            saveAll(); renderTables(); updateAllStats();
+        }
+        function saveAll() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(checkData));
+            localStorage.setItem(ORDER_KEY, JSON.stringify(currentOrder));
+            localStorage.setItem(HIDDEN_KEY, JSON.stringify(hiddenChars));
+            localStorage.setItem(CUSTOM_CHARS_KEY, JSON.stringify(customCharData));
+        }
+
+        function setRowStatus(charId, status) {
+            const activeBosses = getActiveBosses();
+            if (status) {
+                let selectedGroups = new Set();
+                const sortedForSelection = [...activeBosses].sort((a,b) => b.price - a.price);
+                sortedForSelection.forEach(boss => {
+                    const uniqueId = `${charId}_${boss.id}`;
+                    if (boss.group) {
+                        if (!selectedGroups.has(boss.group)) { checkData[uniqueId] = true; selectedGroups.add(boss.group); }
+                        else { delete checkData[uniqueId]; }
+                    } else { checkData[uniqueId] = true; }
+                });
+            } else { activeBosses.forEach((boss) => delete checkData[`${charId}_${boss.id}`]); }
+            saveAll(); renderTables(); updateAllStats();
+        }
+
+        function updateRank(oldIndex, newRankValue) {
+            let newRank = parseInt(newRankValue);
+            if (isNaN(newRank)) return;
+            if (newRank < 1) newRank = 1; if (newRank > currentOrder.length) newRank = currentOrder.length;
+            let newIndex = newRank - 1; if (newIndex === oldIndex) return;
+            const item = currentOrder.splice(oldIndex, 1)[0]; currentOrder.splice(newIndex, 0, item);
+            saveAll(); renderTables(); updateAllStats();
+        }
+
+        function exportData() {
+            const dataToSave = {
+                version: "boss_v10", date: new Date().toISOString(),
+                checkData: checkData, orderData: currentOrder, hiddenData: hiddenChars,
+                hiddenBosses: hiddenBossIds, sortDesc: sortDesc, customCharData: customCharData
+            };
+            const blob = new Blob([JSON.stringify(dataToSave, null, 2)], {type: "application/json"});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = `maple_Boss_v10_${new Date().toISOString().slice(0,10)}.json`;
+            a.click(); URL.revokeObjectURL(url);
+        }
+
+        function importData(input) {
+            const file = input.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.checkData && data.orderData) {
+                        if(confirm("即將覆蓋資料，確定嗎？")) {
+                            checkData = data.checkData; currentOrder = data.orderData;
+                            hiddenChars = data.hiddenData || []; hiddenBossIds = data.hiddenBosses || [];
+                            sortDesc = (data.sortDesc !== undefined) ? data.sortDesc : true;
+                            customCharData = data.customCharData || [];
+                            saveAll(); localStorage.setItem(HIDDEN_BOSS_KEY, JSON.stringify(hiddenBossIds)); localStorage.setItem(SORT_ORDER_KEY, JSON.stringify(sortDesc));
+                            location.reload();
+                        }
+                    } else { alert("格式錯誤"); }
+                } catch (err) { alert("讀取失敗"); }
+            };
+            reader.readAsText(file); input.value = '';
+        }
+
+        function initTable() {
+            updateSortBtnText();
+            const activeBosses = getActiveBosses();
+            const headerRow = document.getElementById('headerRow');
+            document.querySelector('table').style.minWidth = (300 + activeBosses.length * 80) + 'px';
+            let thHTML = '<th>順位</th><th>角色</th>';
+            activeBosses.forEach(boss => {
+                const monthlyBadge = boss.type === 'monthly' ? '<span class="monthly-badge">月</span>' : '';
+                thHTML += `<th>${boss.name}${monthlyBadge}<span class="boss-price">${formatShortMeso(boss.price)}</span></th>`
+            });
+            thHTML += '<th class="col-stat-count">數</th><th class="col-stat-total">小計</th>';
+            headerRow.innerHTML = thHTML;
+            renderTables(); updateAllStats(); initDragScroll(); 
+        }
+
+        function renderTables() {
+            const activeBosses = getActiveBosses();
+            const activeBody = document.getElementById('activeBody'); activeBody.innerHTML = "";
+            currentOrder.forEach((charId, index) => {
+                const char = getCharById(charId); if (!char) return;
+                activeBody.appendChild(createRow(char, index, false, activeBosses));
+            });
+            const hiddenBody = document.getElementById('hiddenBody'); hiddenBody.innerHTML = "";
+            hiddenChars.forEach((charId) => {
+                const char = getCharById(charId); if (!char) return;
+                hiddenBody.appendChild(createRow(char, -1, true, activeBosses));
+            });
+            document.getElementById('hiddenCount').innerText = hiddenChars.length;
+        }
+
+        function createRow(char, index, isHidden, activeBosses) {
+            const tr = document.createElement('tr'); tr.id = `tr-${char.id}`; tr.className = `stat-${char.stat} ${isHidden ? 'hidden-row' : ''}`; tr.setAttribute('data-id', char.id);
+            let rankInputHTML = isHidden ? `<th class="rank-col">-</th>` : `<th class="rank-col"><input type="number" class="rank-input" value="${index + 1}" min="1" max="${currentOrder.length}" onchange="updateRank(${index}, this.value)"></th>`;
+            let btnsHTML = isHidden 
+                ? `<button class="btn-mini btn-restore" onclick="event.stopPropagation(); restoreCharacter('${char.id}')">↩️</button>${char.isCustom ? `<button class="btn-mini btn-delete-char" onclick="event.stopPropagation(); deleteCustomCharacter('${char.id}')">🗑️</button>` : ''}`
+                : `<button class="btn-mini btn-check" onclick="event.stopPropagation(); setRowStatus('${char.id}', true)">✔</button><button class="btn-mini btn-clear" onclick="event.stopPropagation(); setRowStatus('${char.id}', false)">✘</button><button class="btn-mini btn-hide" onclick="event.stopPropagation(); hideCharacter('${char.id}')">🚫</button>`;
+            let dragAttr = isHidden ? '' : 'draggable="true" ondragstart="handleRowDragStart(event)"';
+            let charHTML = `<th class="char-col" id="th-${char.id}" ${dragAttr} data-char-id="${char.id}"><div style="display:flex; align-items:center; pointer-events:none;">${isHidden ? '' : '<span class="drag-handle-icon">≡</span>'}<div style="display:inline-block; vertical-align:middle;"><div>${char.name} ${char.isCustom?'<span style="font-size:10px;color:#0f0;">(自)</span>':''}</div><span class="stat-label">${statLabels[char.stat]}</span></div></div><div class="action-btns">${btnsHTML}</div></th>`;
+            let bossHTML = "";
+            activeBosses.forEach((boss) => {
+                const uniqueId = `${char.id}_${boss.id}`; const isChecked = checkData[uniqueId]; const cellClass = isChecked ? 'checked boss-cell' : 'boss-cell';
+                bossHTML += `<td class="${cellClass}" id="td-${uniqueId}" onclick="toggleCheck('${char.id}', '${boss.id}', this)" title="${boss.name}: ${formatMeso(boss.price)}"><input type="checkbox" id="${uniqueId}" ${isChecked ? 'checked' : ''}></td>`;
+            });
+            tr.innerHTML = rankInputHTML + charHTML + bossHTML + `<td class="row-count" id="count-${char.id}">0</td><td class="row-total" id="total-${char.id}">0</td>`;
+            return tr;
+        }
+
+        let dragSrcId = null;
+        function handleRowDragStart(e) { dragSrcId = e.target.getAttribute('data-char-id'); e.dataTransfer.effectAllowed = 'move'; e.target.parentElement.classList.add('dragging'); }
+        document.addEventListener('dragover', function(e) { if(dragSrcId) e.preventDefault(); });
+        document.addEventListener('drop', function(e) {
+            if(!dragSrcId) return; e.preventDefault();
+            const dropTarget = e.target.closest('th.char-col');
+            if (dropTarget) {
+                const targetId = dropTarget.getAttribute('data-char-id');
+                if (targetId && targetId !== dragSrcId) {
+                    const srcIndex = currentOrder.indexOf(dragSrcId); const targetIndex = currentOrder.indexOf(targetId);
+                    if (srcIndex > -1 && targetIndex > -1) { currentOrder.splice(srcIndex, 1); currentOrder.splice(targetIndex, 0, dragSrcId); saveAll(); renderTables(); updateAllStats(); }
+                }
+            }
+            dragSrcId = null; document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+        });
+
+        function initDragScroll() {
+            const slider = document.getElementById('scrollContainer'); let isDown = false; let startX; let scrollLeft;
+            slider.addEventListener('mousedown', (e) => { if(e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return; if(e.target.closest('.char-col') || e.target.closest('.rank-col')) return; isDown = true; slider.classList.add('grabbing'); startX = e.pageX - slider.offsetLeft; scrollLeft = slider.scrollLeft; });
+            slider.addEventListener('mouseleave', () => { isDown = false; slider.classList.remove('grabbing'); });
+            slider.addEventListener('mouseup', () => { isDown = false; slider.classList.remove('grabbing'); });
+            slider.addEventListener('mousemove', (e) => { if (!isDown) return; e.preventDefault(); const x = e.pageX - slider.offsetLeft; const walk = (x - startX) * 1.5; slider.scrollLeft = scrollLeft - walk; });
+        }
+
+        function toggleCheck(charId, bossId, tdElement) {
+            const uniqueId = `${charId}_${bossId}`; const checkbox = document.getElementById(uniqueId); checkbox.checked = !checkbox.checked;
+            if (checkbox.checked) {
+                checkData[uniqueId] = true; tdElement.classList.add('checked');
+                const currentBoss = bossDataRaw.find(b => b.id === bossId);
+                if (currentBoss && currentBoss.group) {
+                    const conflictBosses = bossDataRaw.filter(b => b.group === currentBoss.group && b.id !== bossId);
+                    conflictBosses.forEach(otherBoss => {
+                        const otherUniqueId = `${charId}_${otherBoss.id}`;
+                        if (checkData[otherUniqueId]) { delete checkData[otherUniqueId]; const otherCheckbox = document.getElementById(otherUniqueId); if (otherCheckbox) { otherCheckbox.checked = false; document.getElementById(`td-${otherUniqueId}`)?.classList.remove('checked'); } }
+                    });
+                }
+            } else { delete checkData[uniqueId]; tdElement.classList.remove('checked'); }
+            saveAll(); updateAllStats();
+        }
+
+        // [v10 核心修正] 先算帳號有效，再回推角色小計
+        function updateAllStats() {
+            document.querySelectorAll('.ignored-drop').forEach(el => el.classList.remove('ignored-drop'));
+            document.querySelectorAll('.conflict').forEach(el => el.classList.remove('conflict'));
+
+            let accountCandidates = [];
+            const activeBosses = getActiveBosses();
+            
+            // 1. 角色層級過濾 (Check & Top 12)
+            currentOrder.forEach((charId) => {
+                const char = getCharById(charId); if (!char) return;
+                let charCrystals = []; let charSelectedGroups = new Set();
+
+                activeBosses.forEach((boss) => {
+                    if (checkData[`${charId}_${boss.id}`]) {
+                        if (boss.group) charSelectedGroups.add(boss.group);
+                        charCrystals.push({ uniqueId: `${charId}_${boss.id}`, bossId: boss.id, bossName: boss.name, price: boss.price, charId: charId, charName: char.name, type: boss.type });
+                    }
+                });
+
+                activeBosses.forEach((boss) => {
+                    if (!checkData[`${charId}_${boss.id}`] && boss.group && charSelectedGroups.has(boss.group)) {
+                        document.getElementById(`td-${charId}_${boss.id}`)?.classList.add('conflict');
+                    }
+                });
+
+                charCrystals.sort((a,b) => b.price - a.price);
+                const charValid = charCrystals.slice(0, 12);
+                const charIgnored = charCrystals.slice(12);
+
+                charIgnored.forEach(item => document.getElementById(`td-${item.uniqueId}`)?.classList.add('ignored-drop'));
+                
+                const countEl = document.getElementById(`count-${charId}`);
+                countEl.innerText = charCrystals.length;
+                if (charCrystals.length > 12) countEl.classList.add('over-limit'); else countEl.classList.remove('over-limit');
+                
+                accountCandidates.push(...charValid);
+            });
+
+            // 2. 帳號層級過濾 (Top 90)
+            accountCandidates.sort((a,b) => b.price - a.price);
+            const finalValid = accountCandidates.slice(0, 90);
+            const accountIgnored = accountCandidates.slice(90);
+
+            accountIgnored.forEach(item => document.getElementById(`td-${item.uniqueId}`)?.classList.add('ignored-drop'));
+
+            // 3. 計算總金額
+            const grandTotalMeso = finalValid.reduce((sum, item) => sum + item.price, 0);
+            document.getElementById('grandTotalCount').innerText = finalValid.length;
+            document.getElementById('grandTotalMeso').innerText = formatMeso(grandTotalMeso);
+
+            // 4. [修正] 回頭計算角色小計 (只算真正有效的)
+            // 先歸零
+            currentOrder.forEach(charId => { document.getElementById(`total-${charId}`).innerText = "0"; });
+            // 累加有效金額
+            let charTotalsMap = {};
+            finalValid.forEach(item => {
+                if (!charTotalsMap[item.charId]) charTotalsMap[item.charId] = 0;
+                charTotalsMap[item.charId] += item.price;
+            });
+            // 更新 UI
+            for (const [charId, total] of Object.entries(charTotalsMap)) {
+                document.getElementById(`total-${charId}`).innerText = formatShortMeso(total);
+            }
+
+            // 5. 更新明細與Footer
+            renderDetailList(finalValid);
+            
+            let bossClearCounts = {};
+            activeBosses.forEach(b => bossClearCounts[b.id] = 0);
+            finalValid.forEach(item => { if(bossClearCounts[item.bossId] !== undefined) bossClearCounts[item.bossId]++; });
+            let footerHTML = `<tr><th></th><th>有效擊殺數</th>`;
+            activeBosses.forEach(boss => {
+                const count = bossClearCounts[boss.id];
+                const style = count > 0 ? 'color: #fff' : 'color:#555;';
+                footerHTML += `<td style="${style}">${count}</td>`;
+            });
+            footerHTML += `<td class="col-stat-count">${finalValid.length}</td><td class="col-stat-total">${formatShortMeso(grandTotalMeso)}</td></tr>`;
+            document.getElementById('tableFooter').innerHTML = footerHTML;
+        }
+
+        function renderDetailList(validList) {
+            const container = document.getElementById('detailContent');
+            if(validList.length === 0) { container.innerHTML = "<div style='text-align:center; color:#666; padding:20px;'>尚無有效結晶數據</div>"; return; }
+            const grouped = {};
+            validList.forEach(item => {
+                if(!grouped[item.charId]) grouped[item.charId] = { name: item.charName, crystals: [], total: 0 };
+                grouped[item.charId].crystals.push(item); grouped[item.charId].total += item.price;
+            });
+            let html = `<table class="detail-table"><thead><tr><th width="15%">角色</th><th width="70%">有效BOSS (價格高→低)</th><th width="15%">小計</th></tr></thead><tbody>`;
+            currentOrder.forEach(charId => {
+                if(grouped[charId]) {
+                    const charData = grouped[charId];
+                    charData.crystals.sort((a,b) => b.price - a.price);
+                    const bossListStr = charData.crystals.map(c => {
+                        const monthlyBadge = c.type === 'monthly' ? '<span class="monthly-badge">月</span>' : '';
+                        return `<span class="boss-tag">${c.bossName}${monthlyBadge} <span class="tag-price">(${formatShortMeso(c.price)})</span></span>`;
+                    }).join('');
+                    html += `<tr><td style="font-weight:bold; color:#fff;">${charData.name}</td><td style="text-align:left;">${bossListStr}</td><td style="color:#ffd700; font-family:monospace; font-weight:bold;">${formatMeso(charData.total)}</td></tr>`;
+                }
+            });
+            html += "</tbody></table>";
+            container.innerHTML = html;
+        }
+
+        function resetData() { if(confirm("確定要清除本週所有勾選紀錄嗎？")) { checkData = {}; saveAll(); initTable(); } }
+        function resetOrder() { if(confirm("確定重置順序？")) { localStorage.removeItem(ORDER_KEY); localStorage.removeItem(HIDDEN_KEY); location.reload(); } }
+
+        initTable();
+    </script>
+</body>
+</html>
